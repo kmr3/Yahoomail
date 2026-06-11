@@ -208,13 +208,31 @@ def safe_append_send_log(
         pass
 
 
-def write_error_log(exc: Exception) -> None:
+def write_error_log(exc: Exception, context: str = "") -> None:
     try:
         with ERROR_LOG_PATH.open("a", encoding="utf-8") as file:
             file.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\n")
+            if context:
+                file.write(f"{context}\n")
             file.write("".join(traceback.format_exception(exc)))
     except OSError:
         pass
+
+
+def connection_error_message(exc: Exception, host: str, port: int, security: str) -> str:
+    base = (
+        f"メールサーバーにつながりませんでした。config.json の smtp.host={host}, "
+        f"smtp.port={port}, smtp.security={security} を確認してください。"
+    )
+    if isinstance(exc, socket.gaierror):
+        return base + " サーバー名が間違っているか、インターネット接続に問題がある可能性があります。"
+    if isinstance(exc, socket.timeout):
+        return base + " 接続に時間がかかりすぎています。会社や学校のネットワークでブロックされている可能性があります。"
+    if isinstance(exc, ssl.SSLError):
+        return base + " SSL設定とポート番号の組み合わせが合っていない可能性があります。Yahoo!メールは通常 ssl と 465 です。"
+    if isinstance(exc, ConnectionRefusedError):
+        return base + " ポート番号が違うか、ネットワーク側で接続が止められている可能性があります。"
+    return base + " インターネット接続、セキュリティソフト、会社や学校のネットワーク制限も確認してください。"
 
 
 def validate_excel_file(path: Path) -> None:
@@ -289,6 +307,7 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
             "送信完了",
         )
     except smtplib.SMTPAuthenticationError as exc:
+        write_error_log(exc, "SMTP authentication failed.")
         safe_append_send_log(
             "error",
             recipient_name,
@@ -301,6 +320,7 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
             "メールアドレスまたはパスワードが違う可能性があります。Yahoo!メールのSMTP利用設定とパスワードを確認してください。"
         ) from exc
     except smtplib.SMTPRecipientsRefused as exc:
+        write_error_log(exc, "SMTP recipient refused.")
         safe_append_send_log(
             "error",
             recipient_name,
@@ -313,6 +333,7 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
             "宛先に送信できませんでした。宛先メールアドレスが正しいか確認してください。"
         ) from exc
     except smtplib.SMTPSenderRefused as exc:
+        write_error_log(exc, "SMTP sender refused.")
         safe_append_send_log(
             "error",
             recipient_name,
@@ -332,6 +353,10 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
         ConnectionError,
         OSError,
     ) as exc:
+        write_error_log(
+            exc,
+            f"SMTP connection failed. host={host}, port={port}, security={security}",
+        )
         safe_append_send_log(
             "error",
             recipient_name,
@@ -340,10 +365,9 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
             attachment_path.name,
             "接続エラー",
         )
-        raise UserFacingError(
-            "メールサーバーにつながりませんでした。インターネット接続とSMTP設定を確認してください。"
-        ) from exc
+        raise UserFacingError(connection_error_message(exc, host, port, security)) from exc
     except smtplib.SMTPException as exc:
+        write_error_log(exc, "SMTP send failed.")
         safe_append_send_log(
             "error",
             recipient_name,
@@ -626,7 +650,7 @@ class MailSenderApp(ctk.CTk):
             error_message = str(exc)
             self.after(0, lambda: self.finish_send(dialog, False, error_message))
         except Exception as exc:
-            write_error_log(exc)
+            write_error_log(exc, "Unexpected application error.")
             self.after(
                 0,
                 lambda: self.finish_send(

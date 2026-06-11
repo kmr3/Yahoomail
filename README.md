@@ -140,3 +140,20 @@ exe版でも `send_log.csv` はexeと同じ場所に作成されます。
 
 - 「メールサーバーにつながりませんでした」  
   インターネット接続、SMTPサーバー名、ポート番号を確認してください。
+
+WindowsのPowerShellで、Yahoo!メールのSMTPサーバーに接続できるか確認できます。
+
+```powershell
+Test-NetConnection smtp.mail.yahoo.co.jp -Port 465
+```
+
+`TcpTestSucceeded : True` と表示されれば、パソコンからYahoo!メールのSMTPサーバーへ接続できています。
+
+`False` の場合は、以下を確認してください。
+
+- `config.json` の `smtp.host` が `smtp.mail.yahoo.co.jp` になっている
+- `config.json` の `smtp.port` が `465` になっている
+- `config.json` の `smtp.security` が `ssl` になっている
+- 会社、学校、セキュリティソフト、VPNなどでメール送信用ポートが止められていない
+
+詳しい原因は、アプリと同じ場所に作成される `error_log.txt` に記録されます。
