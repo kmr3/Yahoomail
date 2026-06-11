@@ -77,6 +77,16 @@ def main() -> None:
         print("NG: ログインできませんでした。")
         print("Yahoo!メールのSMTP利用設定、ログイン名、パスワードを確認してください。")
         print(f"詳細: {exc}")
+    except smtplib.SMTPServerDisconnected as exc:
+        print("NG: ログイン確認中にYahoo!メール側から接続が切られました。")
+        print("通信は届いていますが、ログインが受け付けられていない可能性が高いです。")
+        print("次を確認してください。")
+        print("- Yahoo!メール設定で「Yahoo! JAPAN公式サービス以外からのアクセス」を許可する")
+        print("- 同じ設定画面で SMTP を「利用する」にする")
+        print("- config.json の auth.username が送信用Yahoo!メールアドレス、またはYahoo! JAPAN IDになっている")
+        print("- .env の YAHOO_MAIL_PASSWORD がYahoo! JAPAN IDのパスワードになっている")
+        print("- シークレットIDを使う設定の場合は、auth.username にシークレットIDを入れる")
+        print(f"詳細: {exc}")
     except ssl.SSLError as exc:
         print("NG: SSL接続で止まりました。")
         print("セキュリティソフト、VPN、プロキシ、SSL検査機能が影響している可能性があります。")

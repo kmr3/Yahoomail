@@ -345,9 +345,21 @@ def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> 
         raise UserFacingError(
             "差出人メールアドレスに問題があります。config.json の sender.email を確認してください。"
         ) from exc
+    except smtplib.SMTPServerDisconnected as exc:
+        write_error_log(exc, "SMTP server disconnected during login or send.")
+        safe_append_send_log(
+            "error",
+            recipient_name,
+            recipient_email,
+            subject,
+            attachment_path.name,
+            "認証中に切断",
+        )
+        raise UserFacingError(
+            "Yahoo!メールへのログイン確認中に接続が切れました。Yahoo!メール側で「公式サービス以外からのアクセス」を許可し、SMTPを利用する設定になっているか確認してください。ログイン名とパスワードも確認してください。"
+        ) from exc
     except (
         smtplib.SMTPConnectError,
-        smtplib.SMTPServerDisconnected,
         socket.timeout,
         socket.gaierror,
         ConnectionError,
