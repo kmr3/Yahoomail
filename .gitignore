@@ -1,5 +1,6 @@
 .env
 send_log.csv
+error_log.txt
 __pycache__/
 *.py[cod]
 .venv/

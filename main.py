@@ -7,6 +7,7 @@ import ssl
 import smtplib
 import sys
 import threading
+import traceback
 from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -48,6 +49,7 @@ def app_dir() -> Path:
 BASE_DIR = app_dir()
 CONFIG_PATH = BASE_DIR / "config.json"
 LOG_PATH = BASE_DIR / "send_log.csv"
+ERROR_LOG_PATH = BASE_DIR / "error_log.txt"
 ENV_PATH = BASE_DIR / ".env"
 
 
@@ -206,6 +208,15 @@ def safe_append_send_log(
         pass
 
 
+def write_error_log(exc: Exception) -> None:
+    try:
+        with ERROR_LOG_PATH.open("a", encoding="utf-8") as file:
+            file.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\n")
+            file.write("".join(traceback.format_exception(exc)))
+    except OSError:
+        pass
+
+
 def validate_excel_file(path: Path) -> None:
     if not path.exists():
         raise UserFacingError("選んだExcelファイルが見つかりません。もう一度選び直してください。")
@@ -215,7 +226,7 @@ def validate_excel_file(path: Path) -> None:
 
 def build_message(config: dict, subject: str, body: str, attachment_path: Path) -> EmailMessage:
     recipient_name, recipient_email = recipient_from_config(config)
-    _, sender_email = sender_from_config(config)
+    sender_name, sender_email = sender_from_config(config)
 
     if not recipient_email:
         raise UserFacingError("宛先メールアドレスが空です。config.json を確認してください。")
@@ -614,13 +625,14 @@ class MailSenderApp(ctk.CTk):
         except UserFacingError as exc:
             error_message = str(exc)
             self.after(0, lambda: self.finish_send(dialog, False, error_message))
-        except Exception:
+        except Exception as exc:
+            write_error_log(exc)
             self.after(
                 0,
                 lambda: self.finish_send(
                     dialog,
                     False,
-                    "予期しない問題が起きました。アプリを再起動してもう一度お試しください。",
+                    "予期しない問題が起きました。最新版に更新してもう一度お試しください。解決しない場合は error_log.txt を確認してください。",
                 ),
             )
         else:
