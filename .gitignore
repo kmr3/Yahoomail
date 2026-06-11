@@ -1,0 +1,8 @@
+.env
+send_log.csv
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.spec

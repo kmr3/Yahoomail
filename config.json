@@ -1,0 +1,26 @@
+{
+  "app": {
+    "title": "Excelメール送信",
+    "default_subject": "Excelファイルを送付します",
+    "default_body": "お世話になっております。\nExcelファイルを添付いたします。\nよろしくお願いいたします。"
+  },
+  "recipient": {
+    "name": "送信先名をここに入力",
+    "email": "recipient@example.com"
+  },
+  "sender": {
+    "name": "差出人名をここに入力",
+    "email": "your-yahoo-id@yahoo.co.jp"
+  },
+  "smtp": {
+    "host": "smtp.mail.yahoo.co.jp",
+    "port": 465,
+    "security": "ssl"
+  },
+  "auth": {
+    "username": "your-yahoo-id@yahoo.co.jp",
+    "password_env": "YAHOO_MAIL_PASSWORD",
+    "use_windows_credential_manager": false,
+    "credential_service_name": "yahoo-mail-excel-sender"
+  }
+}
