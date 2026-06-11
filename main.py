@@ -70,8 +70,56 @@ def load_config() -> dict:
     return config
 
 
-def recipient_from_config(config: dict) -> tuple[str, str]:
-    recipient = config.get("recipient", {})
+def recipients_from_config(config: dict) -> list[dict]:
+    recipients = config.get("recipients")
+    if isinstance(recipients, list) and recipients:
+        return recipients
+
+    recipient = config.get("recipient")
+    if isinstance(recipient, dict) and recipient:
+        return [
+            {
+                "label": str(recipient.get("label", recipient.get("name", "送信先"))),
+                "name": str(recipient.get("name", "")),
+                "email": str(recipient.get("email", "")),
+            }
+        ]
+
+    return []
+
+
+def recipient_labels_from_config(config: dict) -> list[str]:
+    labels = []
+    for index, recipient in enumerate(recipients_from_config(config), start=1):
+        label = str(recipient.get("label", "")).strip()
+        name = str(recipient.get("name", "")).strip()
+        email = str(recipient.get("email", "")).strip()
+        labels.append(label or name or email or f"送信先{index}")
+    return labels
+
+
+def default_recipient_label(config: dict) -> str:
+    labels = recipient_labels_from_config(config)
+    configured_default = str(config.get("app", {}).get("default_recipient", "")).strip()
+    if configured_default in labels:
+        return configured_default
+    return labels[0] if labels else ""
+
+
+def recipient_from_config(config: dict, selected_label: str | None = None) -> tuple[str, str]:
+    recipients = recipients_from_config(config)
+    labels = recipient_labels_from_config(config)
+    label = (selected_label or default_recipient_label(config)).strip()
+
+    selected_index = 0
+    if label and label in labels:
+        selected_index = labels.index(label)
+
+    if not recipients:
+        recipient = {}
+    else:
+        recipient = recipients[selected_index]
+
     name = str(recipient.get("name", "")).strip()
     email = str(recipient.get("email", "")).strip()
     return name, email
@@ -242,8 +290,14 @@ def validate_excel_file(path: Path) -> None:
         raise UserFacingError("添付できるのは Excelファイル（.xlsx / .xls / .xlsm）だけです。")
 
 
-def build_message(config: dict, subject: str, body: str, attachment_path: Path) -> EmailMessage:
-    recipient_name, recipient_email = recipient_from_config(config)
+def build_message(
+    config: dict,
+    subject: str,
+    body: str,
+    attachment_path: Path,
+    recipient_label: str | None = None,
+) -> EmailMessage:
+    recipient_name, recipient_email = recipient_from_config(config, recipient_label)
     sender_name, sender_email = sender_from_config(config)
 
     if not recipient_email:
@@ -276,14 +330,20 @@ def build_message(config: dict, subject: str, body: str, attachment_path: Path) 
     return message
 
 
-def send_email(config: dict, subject: str, body: str, attachment_path: Path) -> None:
+def send_email(
+    config: dict,
+    subject: str,
+    body: str,
+    attachment_path: Path,
+    recipient_label: str | None = None,
+) -> None:
     load_dotenv(ENV_PATH)
 
-    recipient_name, recipient_email = recipient_from_config(config)
+    recipient_name, recipient_email = recipient_from_config(config, recipient_label)
     sender_name, sender_email = sender_from_config(config)
     host, port, security = smtp_from_config(config)
     username, password = auth_from_config(config, sender_email)
-    message = build_message(config, subject, body, attachment_path)
+    message = build_message(config, subject, body, attachment_path, recipient_label)
 
     try:
         if security == "ssl":
@@ -403,6 +463,7 @@ class MailSenderApp(ctk.CTk):
         self.config_data = load_config()
         self.selected_file: Path | None = None
         self.is_sending = False
+        self.recipient_var = ctk.StringVar(value=default_recipient_label(self.config_data))
 
         app_config = self.config_data.get("app", {})
         self.title(str(app_config.get("title", "Excelメール送信")))
@@ -432,8 +493,6 @@ class MailSenderApp(ctk.CTk):
         )
         title.grid(row=0, column=0, padx=28, pady=(26, 8), sticky="w")
 
-        recipient_name, recipient_email = recipient_from_config(self.config_data)
-        recipient_text = f"{recipient_name}\n{recipient_email}" if recipient_name else recipient_email
         recipient_box = ctk.CTkFrame(container, fg_color="#eef6ff", corner_radius=8)
         recipient_box.grid(row=1, column=0, padx=28, pady=(10, 18), sticky="ew")
         recipient_box.grid_columnconfigure(0, weight=1)
@@ -444,13 +503,28 @@ class MailSenderApp(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color="#1d4ed8",
         ).grid(row=0, column=0, padx=18, pady=(16, 4), sticky="w")
-        ctk.CTkLabel(
+
+        recipient_options = recipient_labels_from_config(self.config_data) or ["送信先未設定"]
+        self.recipient_menu = ctk.CTkOptionMenu(
             recipient_box,
-            text=recipient_text or "宛先メールアドレスが未設定です",
-            font=ctk.CTkFont(size=20, weight="bold"),
+            values=recipient_options,
+            variable=self.recipient_var,
+            font=ctk.CTkFont(size=18, weight="bold"),
+            dropdown_font=ctk.CTkFont(size=18),
+            height=42,
+            command=lambda _: self.update_recipient_display(),
+        )
+        self.recipient_menu.grid(row=1, column=0, padx=18, pady=(0, 10), sticky="ew")
+
+        self.recipient_detail_label = ctk.CTkLabel(
+            recipient_box,
+            text="",
+            font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#111827",
             justify="left",
-        ).grid(row=1, column=0, padx=18, pady=(0, 16), sticky="w")
+        )
+        self.recipient_detail_label.grid(row=2, column=0, padx=18, pady=(0, 16), sticky="w")
+        self.update_recipient_display()
 
         self.file_button = ctk.CTkButton(
             container,
@@ -538,6 +612,16 @@ class MailSenderApp(ctk.CTk):
         self.file_label.configure(text=selected.name, text_color="#111827", fg_color="#ecfdf5")
         self.status_label.configure(text="ファイルを確認しました。次に件名と本文を確認してください。")
 
+    def update_recipient_display(self) -> None:
+        recipient_name, recipient_email = recipient_from_config(
+            self.config_data, self.recipient_var.get()
+        )
+        if recipient_name and recipient_email:
+            text = f"{recipient_name}\n{recipient_email}"
+        else:
+            text = recipient_email or "宛先メールアドレスが未設定です"
+        self.recipient_detail_label.configure(text=text)
+
     def open_confirmation(self) -> None:
         if self.is_sending:
             return
@@ -548,7 +632,9 @@ class MailSenderApp(ctk.CTk):
             self.show_message("確認が必要です", str(exc), kind="warning")
             return
 
-        recipient_name, recipient_email = recipient_from_config(self.config_data)
+        recipient_name, recipient_email = recipient_from_config(
+            self.config_data, self.recipient_var.get()
+        )
         subject = self.subject_entry.get().strip()
         body = self.body_text.get("1.0", "end").strip()
         attachment_name = self.selected_file.name if self.selected_file else ""
@@ -619,7 +705,7 @@ class MailSenderApp(ctk.CTk):
         send_button.grid(row=0, column=1, padx=(8, 0), sticky="ew")
 
     def validate_before_confirmation(self) -> None:
-        _, recipient_email = recipient_from_config(self.config_data)
+        _, recipient_email = recipient_from_config(self.config_data, self.recipient_var.get())
         if not recipient_email:
             raise UserFacingError("宛先メールアドレスが空です。config.json を確認してください。")
         if not self.selected_file:
@@ -639,10 +725,11 @@ class MailSenderApp(ctk.CTk):
         subject = self.subject_entry.get().strip()
         body = self.body_text.get("1.0", "end").strip()
         attachment_path = self.selected_file
+        recipient_label = self.recipient_var.get()
 
         thread = threading.Thread(
             target=self.send_in_background,
-            args=(dialog, subject, body, attachment_path),
+            args=(dialog, subject, body, attachment_path, recipient_label),
             daemon=True,
         )
         thread.start()
@@ -653,11 +740,12 @@ class MailSenderApp(ctk.CTk):
         subject: str,
         body: str,
         attachment_path: Path | None,
+        recipient_label: str,
     ) -> None:
         try:
             if attachment_path is None:
                 raise UserFacingError("添付するExcelファイルを選んでください。")
-            send_email(self.config_data, subject, body, attachment_path)
+            send_email(self.config_data, subject, body, attachment_path, recipient_label)
         except UserFacingError as exc:
             error_message = str(exc)
             self.after(0, lambda: self.finish_send(dialog, False, error_message))

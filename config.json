@@ -1,13 +1,22 @@
 {
   "app": {
     "title": "Excelメール送信",
+    "default_recipient": "夜間部",
     "default_subject": "Excelファイルを送付します",
     "default_body": "お世話になっております。\nExcelファイルを添付いたします。\nよろしくお願いいたします。"
   },
-  "recipient": {
-    "name": "送信先名をここに入力",
-    "email": "recipient@example.com"
-  },
+  "recipients": [
+    {
+      "label": "夜間部",
+      "name": "夜間部",
+      "email": "night@example.com"
+    },
+    {
+      "label": "中間部",
+      "name": "中間部",
+      "email": "middle@example.com"
+    }
+  ],
   "sender": {
     "name": "差出人名をここに入力",
     "email": "your-yahoo-id@yahoo.co.jp"
