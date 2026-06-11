@@ -70,20 +70,40 @@ def load_config() -> dict:
     return config
 
 
+def text_from_any_key(data: dict, keys: list[str]) -> str:
+    for key in keys:
+        value = data.get(key)
+        if value is not None:
+            return str(value).strip()
+    return ""
+
+
+def normalize_recipient(recipient: dict, fallback_label: str = "") -> dict:
+    label = text_from_any_key(recipient, ["label", "name"]) or fallback_label
+    name = text_from_any_key(recipient, ["name"]) or label
+    email = text_from_any_key(recipient, ["email", "mail", "address", "メールアドレス"])
+    return {"label": label, "name": name, "email": email}
+
+
 def recipients_from_config(config: dict) -> list[dict]:
     recipients = config.get("recipients")
     if isinstance(recipients, list) and recipients:
-        return recipients
+        return [
+            normalize_recipient(recipient, f"送信先{index}")
+            for index, recipient in enumerate(recipients, start=1)
+            if isinstance(recipient, dict)
+        ]
+
+    if isinstance(recipients, dict) and recipients:
+        return [
+            normalize_recipient(recipient, str(label))
+            for label, recipient in recipients.items()
+            if isinstance(recipient, dict)
+        ]
 
     recipient = config.get("recipient")
     if isinstance(recipient, dict) and recipient:
-        return [
-            {
-                "label": str(recipient.get("label", recipient.get("name", "送信先"))),
-                "name": str(recipient.get("name", "")),
-                "email": str(recipient.get("email", "")),
-            }
-        ]
+        return [normalize_recipient(recipient, "送信先")]
 
     return []
 
@@ -120,8 +140,8 @@ def recipient_from_config(config: dict, selected_label: str | None = None) -> tu
     else:
         recipient = recipients[selected_index]
 
-    name = str(recipient.get("name", "")).strip()
-    email = str(recipient.get("email", "")).strip()
+    name = text_from_any_key(recipient, ["name", "label"])
+    email = text_from_any_key(recipient, ["email", "mail", "address", "メールアドレス"])
     return name, email
 
 
