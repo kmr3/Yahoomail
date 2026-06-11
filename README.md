@@ -157,3 +157,17 @@ Test-NetConnection smtp.mail.yahoo.co.jp -Port 465
 - 会社、学校、セキュリティソフト、VPNなどでメール送信用ポートが止められていない
 
 詳しい原因は、アプリと同じ場所に作成される `error_log.txt` に記録されます。
+
+さらに詳しく確認する場合は、次の診断を実行してください。
+
+```powershell
+python smtp_check.py
+```
+
+この診断では、以下を順番に確認します。
+
+1. Yahoo!メールへのSSL接続
+2. Yahoo!メールサーバーからの応答
+3. Yahoo!メールへのログイン
+
+`Test-NetConnection` が `True` なのにアプリで接続エラーになる場合は、`python smtp_check.py` の結果を確認してください。
