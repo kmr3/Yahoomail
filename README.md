@@ -17,6 +17,7 @@ python -m venv .venv
 3. 必要なものをインストールします。
 
 ```powershell
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
